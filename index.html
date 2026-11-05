@@ -570,6 +570,34 @@ ul { list-style: none; }
   transition: opacity .35s, visibility .35s, background-color .25s;
 }
 .is-playing .card-sound { opacity: 1; visibility: visible; }
+/* Cinema-style button at the bottom of the film, faint until hovered */
+.card-next {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+  display: inline-flex;
+  align-items: center;
+  gap: .7rem;
+  padding: .8rem 2rem;
+  border: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 99px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: clamp(1.1rem, 1.6vw, 1.45rem);
+  font-weight: 500;
+  letter-spacing: .01em;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, .5);
+  cursor: pointer;
+  transform: translateX(-50%);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity .3s, visibility .3s, background .25s, border-color .25s;
+}
+.card-next svg { width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.is-playing .card-next { opacity: .5; visibility: visible; }
+.is-playing .card-next:hover, .is-playing .card-next:focus-visible, .is-playing .card-next:active { opacity: 1; background: rgba(3, 25, 10, .62); border-color: rgba(255, 255, 255, .8); }
 .card-sound:hover { background: var(--forest-night); }
 .card-sound svg { width: 55%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .card-sound .sound-on, .card-sound.is-on .sound-off { display: none; }
@@ -1087,7 +1115,7 @@ let glowResting = false;
 let glowCovered = false;
 function startGlow() {
   const canvas = $('#glow');
-  const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'low-power' });
+  const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'low-power', preserveDrawingBuffer: true });
   if (!gl) return; // the CSS gradient on #glow stays as the still version
 
   const vert = 'attribute vec2 a; void main() { gl_Position = vec4(a, 0., 1.); }';
@@ -1205,7 +1233,7 @@ function startGlow() {
     if (touch && canvas.clientWidth === lastW) return;
     lastW = canvas.clientWidth;
     size();
-    if (calm) draw(0);
+    if (calm || glowResting) draw(performance.now());
   }).observe(canvas);
   if (calm) return draw(0);
   let tick = 0;
@@ -1257,6 +1285,7 @@ $('#stack').innerHTML = PROJECTS.map((p, i) => `
         </a>
       </div>
       ${p.audio ? SOUND_BUTTON : ''}
+      <button class="card-next" type="button" data-next>Next<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6"/></svg></button>
     </div>
   </article>`).join('');
 
@@ -1450,7 +1479,7 @@ function showHome(target, push = true) {
 }
 document.addEventListener('click', e => {
   const link = e.target.closest('[data-project]');
-  if (!link || e.target.closest('[data-sound]')) return;
+  if (!link || e.target.closest('[data-sound], [data-next]')) return;
   e.preventDefault();
   showProject(Number(link.dataset.project));
 });
@@ -1531,15 +1560,17 @@ if (!motion) {
     ScrollTrigger.create({
       trigger: card,
       start: 'top top',
-      end: () => `+=${innerHeight * 2.75}`,
+      end: () => `+=${innerHeight * (i === cards.length - 1 ? 1.5 : 2.75)}`,
       onToggle: self => { inRange = self.isActive; sync(); }
     });
 
-    /* When a video ends, the page carries on to the next project by itself */
-    $('video', card)?.addEventListener('ended', () => {
+    /* The page carries on to the next project when a video ends, or sooner with Next */
+    const toNext = duration => {
       const target = opening[i + 1] ? opening[i + 1].scrollTrigger.end : $('.more');
-      lenis?.scrollTo(target, { duration: 2.8, force: true, easing: t => 1 - Math.pow(1 - t, 3) });
-    });
+      lenis?.scrollTo(target, { duration, force: true, easing: t => 1 - Math.pow(1 - t, 3) });
+    };
+    $('video', card)?.addEventListener('ended', () => toNext(2.8));
+    $('[data-next]', card).addEventListener('click', () => toNext(2));
 
     const next = cards[i + 1];
     if (next) {
