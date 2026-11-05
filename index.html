@@ -792,6 +792,11 @@ ul { list-style: none; }
 .menu-list a:hover::before { transform: scale(1); }
 .menu-foot { display: grid; gap: .9rem; }
 
+@media (max-aspect-ratio: 1/1) {
+  .card-inner video { object-fit: contain; }
+  .card-inner { background: #03290F; }
+  .is-playing .cover-glaze { opacity: 0; }
+}
 @media (max-width: 720px) {
   .services { grid-template-columns: minmax(0, 1fr); gap: 1.4rem; }
   .sitek-grid { grid-template-columns: minmax(0, 1fr); }
@@ -1211,6 +1216,8 @@ const ART = [
 const artSvg = i => `<svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Placeholder artwork">${ART[i % ART.length](800, 600)}</svg>`;
 
 
+// Phones held upright get the vertical cut of each film
+const filmFor = p => (matchMedia('(max-aspect-ratio: 1/1)').matches ? p.video.replace('.mp4', '-v.mp4') : p.video);
 const SOUND_BUTTON = `<button class="card-sound" type="button" data-sound aria-label="Turn sound on" aria-pressed="false">
   <svg viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path class="sound-off" d="m16 9.5 5 5m0-5-5 5"/><path class="sound-on" d="M16 9a4.2 4.2 0 0 1 0 6m2.6-8.6a8 8 0 0 1 0 11.2"/></svg>
 </button>`;
@@ -1219,7 +1226,7 @@ $('#stack').innerHTML = PROJECTS.map((p, i) => `
     <div class="card-body">
       <div class="card-media">
         <div class="card-inner">${p.video
-          ? `<video src="${p.video}" muted playsinline preload="auto"></video>`
+          ? `<video src="${filmFor(p)}" muted playsinline preload="auto"></video>`
           : `<div class="card-placeholder">${artSvg(i)}</div>`}</div>
         <a class="card-cover" href="#${p.slug}" aria-label="${p.title}, view project">
           <span class="cover-glaze cover-glaze-a"></span>
