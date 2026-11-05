@@ -438,6 +438,8 @@ ul { list-style: none; }
 /* A sticky card cannot move into its own margin, so the last card gets its scroll room from a spacer */
 .stack-card:last-child { margin-bottom: 0; }
 .stack::after { content: ""; display: block; height: 130vh; }
+.touch .stack-card { height: 100lvh; }
+.touch .card-media { clip-path: none; border-radius: 24px; transform: scale(.84); will-change: transform; }
 .card-body { position: absolute; inset: 0; will-change: transform; }
 .card-media {
   position: absolute;
@@ -548,6 +550,7 @@ ul { list-style: none; }
   transform: rotate(14deg);
   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .13), transparent);
 }
+.no-motion .card-media { transform: none; }
 .no-motion .stack-card { position: relative; height: 82svh; margin-bottom: var(--gap); }
 .card-sound {
   position: absolute;
@@ -1075,10 +1078,13 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const hasHover = matchMedia('(hover: hover) and (pointer: fine)').matches;
+const touch = !hasHover;
+if (touch) document.documentElement.classList.add('touch');
 const motion = !calm && typeof gsap !== 'undefined';
 
 /* Moving green light behind the whole site */
 let glowResting = false;
+let glowCovered = false;
 function startGlow() {
   const canvas = $('#glow');
   const gl = canvas.getContext('webgl', { antialias: false, alpha: false, powerPreference: 'low-power' });
@@ -1164,7 +1170,8 @@ function startGlow() {
   const loaderCtx = loaderCanvas.getContext('2d', { alpha: false });
 
   function size() {
-    const w = Math.max(1, Math.ceil(canvas.clientWidth * .5)), h = Math.max(1, Math.ceil(canvas.clientHeight * .5));
+    const k = touch ? .3 : .5;
+    const w = Math.max(1, Math.ceil(canvas.clientWidth * k)), h = Math.max(1, Math.ceil(canvas.clientHeight * k));
     canvas.width = w;
     canvas.height = h;
     loaderCanvas.width = w;
@@ -1192,9 +1199,20 @@ function startGlow() {
     if (loaderCanvas.isConnected) loaderCtx.drawImage(canvas, 0, 0);
   }
   size();
-  new ResizeObserver(() => { size(); if (calm) draw(0); }).observe(canvas);
+  // The address bar changes the height on every scroll, so phones only follow the width
+  let lastW = canvas.clientWidth;
+  new ResizeObserver(() => {
+    if (touch && canvas.clientWidth === lastW) return;
+    lastW = canvas.clientWidth;
+    size();
+    if (calm) draw(0);
+  }).observe(canvas);
   if (calm) return draw(0);
-  (function frame(ms) { if (!glowResting) draw(ms); requestAnimationFrame(frame); })(0);
+  let tick = 0;
+  (function frame(ms) {
+    if (!glowResting && !glowCovered && (!touch || ++tick % 3 === 0)) draw(ms);
+    requestAnimationFrame(frame);
+  })(0);
 }
 try { startGlow(); } catch (e) { console.warn(e); }
 
@@ -1226,7 +1244,7 @@ $('#stack').innerHTML = PROJECTS.map((p, i) => `
     <div class="card-body">
       <div class="card-media">
         <div class="card-inner">${p.video
-          ? `<video src="${filmFor(p)}" muted playsinline preload="auto"></video>`
+          ? `<video src="${filmFor(p)}" muted playsinline preload="${touch ? 'metadata' : 'auto'}"></video>`
           : `<div class="card-placeholder">${artSvg(i)}</div>`}</div>
         <a class="card-cover" href="#${p.slug}" aria-label="${p.title}, view project">
           <span class="cover-glaze cover-glaze-a"></span>
@@ -1463,6 +1481,8 @@ if (!motion) {
     lenis.stop();
   }
 
+  ScrollTrigger.config({ ignoreMobileResize: true });
+
   /* The arrow points the way the page is scrolling */
   let lastY = scrollY;
   const arrow = $('#roleArrow');
@@ -1486,20 +1506,26 @@ if (!motion) {
   const openClip = narrow ? 'inset(0vh 0px round 0px)' : 'inset(0vh 0vw round 0px)';
   const cards = $$('.stack-card');
   const opening = [];
+  if (touch) ScrollTrigger.create({ trigger: '.stack', start: 'top top', end: 'bottom bottom', onToggle: self => { glowCovered = self.isActive; } });
   cards.forEach((card, i) => {
     let inRange = false;
     const sync = () => setPlaying(card, inRange && open.progress() > (card.playing ? .9 : .995) && currentProject < 0);
     const open = gsap.timeline({
       defaults: { ease: 'none' },
       onUpdate: sync,
-      scrollTrigger: { trigger: card, start: 'top top', end: () => `+=${innerHeight * .9}`, scrub: .6 }
-    })
-      .fromTo($('.card-media', card), { clipPath: closedClip }, { clipPath: openClip, duration: 1, ease: 'power2.inOut' }, 0)
+      scrollTrigger: { trigger: card, start: 'top top', end: () => `+=${innerHeight * .9}`, scrub: touch ? true : .6 }
+    });
+    /* Clip paths and blur repaint the whole screen, so phones use transforms only */
+    if (touch) open.fromTo($('.card-media', card), { scale: .84, borderRadius: 24 }, { scale: 1, borderRadius: 0, duration: 1, ease: 'power2.inOut' }, 0);
+    else open.fromTo($('.card-media', card), { clipPath: closedClip }, { clipPath: openClip, duration: 1, ease: 'power2.inOut' }, 0);
+    open
       .fromTo($('.card-cover', card), { '--edge': 1 }, { '--edge': 0, duration: .16 }, 0)
       .fromTo($('.cover-title', card), { scale: .8 }, { scale: 1.32, duration: 1, ease: 'power1.in' }, 0)
       .fromTo($('.cover-sheen', card), { xPercent: 0 }, { xPercent: 640, duration: .9 }, 0)
-      .fromTo($('.card-inner', card), { scale: 1.12 }, { scale: 1, duration: 1, ease: 'power2.out' }, 0)
       .to($('.card-cover', card), { autoAlpha: 0, duration: .24 }, .76);
+    if (!touch) open.fromTo($('.card-inner', card), { scale: 1.12 }, { scale: 1, duration: 1, ease: 'power2.out' }, 0);
+    const film = $('video', card);
+    if (touch && film) ScrollTrigger.create({ trigger: card, start: 'top 180%', once: true, onEnter: () => { film.preload = 'auto'; } });
     opening.push(open);
 
     ScrollTrigger.create({
@@ -1517,8 +1543,8 @@ if (!motion) {
 
     const next = cards[i + 1];
     if (next) {
-      gsap.fromTo($('.card-body', card), { scale: 1, filter: 'blur(0px) brightness(1)' }, {
-        scale: .88, filter: 'blur(7px) brightness(.55)', ease: 'none',
+      gsap.fromTo($('.card-body', card), touch ? { scale: 1 } : { scale: 1, filter: 'blur(0px) brightness(1)' }, {
+        ...(touch ? { scale: .92 } : { scale: .88, filter: 'blur(7px) brightness(.55)' }), ease: 'none',
         scrollTrigger: { trigger: next, start: 'top bottom', end: 'top top', scrub: true }
       });
       ScrollTrigger.create({
