@@ -442,7 +442,9 @@ ul { list-style: none; }
 .stack::after { content: ""; display: block; height: 130vh; }
 .touch .stack-card { height: 100lvh; }
 .touch .card-media { clip-path: none; border-radius: 24px; transform: scale(.84); will-change: transform; }
-.card-body { position: absolute; inset: 0; will-change: transform; }
+.card-body { position: absolute; inset: 0; }
+/* The last card is the only one without the scroll filter, so Chrome can send its video to a hardware overlay and leave stale pixels behind it */
+html:not(.touch) .stack-card:last-child .card-body { filter: brightness(1); }
 .card-media {
   position: absolute;
   inset: 0;
@@ -450,7 +452,7 @@ ul { list-style: none; }
   background: var(--deep-pine);
   clip-path: inset(var(--card-y) var(--card-x) round 24px);
 }
-.card-inner { position: absolute; inset: 0; will-change: transform; }
+.card-inner { position: absolute; inset: 0; }
 .card-inner video, .card-placeholder, .card-placeholder svg {
   display: block;
   width: 100%;
@@ -1444,7 +1446,7 @@ function swapTo(i, target) {
   projectView.hidden = i < 0;
   if (motion) ScrollTrigger.refresh();
   jump(target);
-  if (i < 0) $$('.card-body').forEach(body => { body.style.visibility = ''; });
+  if (i < 0) $$('.card-body').forEach(body => { body.style.display = ''; });
   if (motion) ScrollTrigger.refresh();
 }
 function sweep(label, swap, reveal) {
@@ -1586,8 +1588,9 @@ if (!motion) {
         trigger: next,
         start: () => `top+=${innerHeight * 1.05} top`,
         end: 'max',
-        onEnter: () => { $('.card-body', card).style.visibility = 'hidden'; },
-        onLeaveBack: () => { $('.card-body', card).style.visibility = ''; }
+        /* Finished cards leave the page entirely, so their blurred layers free the graphics memory */
+        onEnter: () => { $('.card-body', card).style.display = 'none'; },
+        onLeaveBack: () => { $('.card-body', card).style.display = ''; }
       });
     }
   });
