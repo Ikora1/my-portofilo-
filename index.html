@@ -440,6 +440,8 @@ ul { list-style: none; }
 .stack-card:last-child { margin-bottom: 0; }
 .stack::after { content: ""; display: block; height: 130vh; }
 .touch .stack-card { height: 100lvh; }
+/* On phones the title glaze holds still instead of drifting behind the scroll */
+.touch .cover-glaze { animation: none; }
 .touch .card-media { clip-path: none; border-radius: 24px; transform: scale(.84); will-change: transform; }
 .card-body { position: absolute; inset: 0; }
 /* The last card is the only one without the scroll filter, so Chrome can send its video to a hardware overlay and leave stale pixels behind it */
@@ -1268,7 +1270,9 @@ const artSvg = i => `<svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid sl
 
 
 // Phones held upright get the vertical cut of each film
-const filmFor = p => (matchMedia('(max-aspect-ratio: 1/1)').matches ? p.video.replace('.mp4', '-v.mp4') : p.video);
+/* Phones held upright get a lighter 720p cut with a still poster; desktop keeps the full films */
+const phoneFilm = touch && matchMedia('(max-aspect-ratio: 1/1)').matches;
+const filmFor = p => (phoneFilm ? p.video.replace('.mp4', '-m.mp4') : matchMedia('(max-aspect-ratio: 1/1)').matches ? p.video.replace('.mp4', '-v.mp4') : p.video);
 const SOUND_BUTTON = `<button class="card-sound" type="button" data-sound aria-label="Turn sound on" aria-pressed="false">
   <svg viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path class="sound-off" d="m16 9.5 5 5m0-5-5 5"/><path class="sound-on" d="M16 9a4.2 4.2 0 0 1 0 6m2.6-8.6a8 8 0 0 1 0 11.2"/></svg>
 </button>`;
@@ -1277,7 +1281,7 @@ $('#stack').innerHTML = PROJECTS.map((p, i) => `
     <div class="card-body">
       <div class="card-media">
         <div class="card-inner">${p.video
-          ? `<video src="${filmFor(p)}" muted playsinline preload="${touch ? 'metadata' : 'auto'}"></video>`
+          ? `<video src="${filmFor(p)}"${phoneFilm ? ` poster="${p.video.replace('.mp4', '-m.webp')}"` : ''} muted playsinline preload="${phoneFilm ? 'none' : touch ? 'metadata' : 'auto'}"></video>`
           : `<div class="card-placeholder">${artSvg(i)}</div>`}</div>
         <a class="card-cover" href="#${p.slug}" aria-label="${p.title}, view project">
           <span class="cover-glaze cover-glaze-a"></span>
@@ -1561,7 +1565,8 @@ if (!motion) {
       .to($('.card-cover', card), { autoAlpha: 0, duration: .24 }, .76);
     if (!touch) open.fromTo($('.card-inner', card), { scale: 1.12 }, { scale: 1, duration: 1, ease: 'power2.out' }, 0);
     const film = $('video', card);
-    if (touch && film) ScrollTrigger.create({ trigger: card, start: 'top 180%', once: true, onEnter: () => { film.preload = 'auto'; } });
+    /* Phones fetch a film only as its card starts to open, so downloading never overlaps the scroll before it */
+    if (touch && film) ScrollTrigger.create({ trigger: card, start: phoneFilm ? 'top top' : 'top 180%', once: true, onEnter: () => { film.preload = 'auto'; } });
     opening.push(open);
 
     ScrollTrigger.create({
@@ -1581,8 +1586,8 @@ if (!motion) {
 
     const next = cards[i + 1];
     if (next) {
-      gsap.fromTo($('.card-body', card), touch ? { scale: 1 } : { scale: 1, filter: 'blur(0px) brightness(1)' }, {
-        ...(touch ? { scale: .92 } : { scale: .88, filter: 'blur(7px) brightness(.55)' }), ease: 'none',
+      gsap.fromTo($('.card-body', card), touch ? { opacity: 1 } : { scale: 1, filter: 'blur(0px) brightness(1)' }, {
+        ...(touch ? { opacity: .35 } : { scale: .88, filter: 'blur(7px) brightness(.55)' }), ease: 'none',
         scrollTrigger: { trigger: next, start: 'top bottom', end: 'top top', scrub: true }
       });
       ScrollTrigger.create({
