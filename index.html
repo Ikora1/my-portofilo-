@@ -24,7 +24,7 @@ setTimeout(() => {
 
 <!--
   PLACEHOLDERS TO REPLACE
-  - Portrait: portrait.webp, portrait-rim.webp and portrait-avatar.webp
+  - Portrait: portrait-clean.webp and portrait-avatar.webp
   - Role, location, intro copy: search "PLACEHOLDER"
   - Statement: search "PLACEHOLDER: statement"
   - Projects, their videos and their pages: the PROJECTS array at the top of the script
@@ -191,7 +191,7 @@ ul { list-style: none; }
   z-index: 1;
   background: linear-gradient(to bottom, rgba(3, 41, 15, .55), transparent 24%);
 }
-/* Depth, back to front: moving light, disc, large word, cast shadow, portrait, rim light */
+/* Depth, back to front: moving light, disc, large word, cast shadow, portrait */
 .hero-word {
   position: absolute;
   z-index: 1;
@@ -272,7 +272,6 @@ ul { list-style: none; }
   opacity: .5;
   transform: translate(-2.5%, 1.5%) scale(1.03);
 }
-.person-rim { opacity: .85; }
 .topbar {
   position: absolute;
   inset: 0 0 auto;
@@ -842,6 +841,9 @@ html:not(.touch) .stack-card:last-child .card-body { filter: brightness(1); }
   .hero-disc { top: 36svh; width: 78vw; margin-left: -39vw; }
   .nav-links { display: none; }
   .nav-menu-btn { display: block; }
+  /* Phone menu: its width includes the padding, so it fits the screen instead of spilling off the left */
+  .menu { box-sizing: border-box; width: 100%; padding-top: 6.5rem; padding-left: max(24px, env(safe-area-inset-left, 0px)); padding-right: max(24px, env(safe-area-inset-right, 0px)); }
+  .menu-list a { font-size: 2.25rem; }
   .locator { top: 9.5%; }
   .globe { width: 3.2rem; height: 3.2rem; }
   .role { top: auto; right: auto; left: max(16px, env(safe-area-inset-left, 0px)); bottom: 2.25rem; gap: 1rem; }
@@ -876,9 +878,8 @@ html:not(.touch) .stack-card:last-child .card-body { filter: brightness(1); }
   <h1 class="hero-word" id="heroWord">ASIM IYAD</h1>
   <div class="hero-person" id="heroVisual">
     <div class="person-depth" id="personDepth">
-      <img class="person-shadow" src="portrait.webp" alt="">
-      <img class="person-main" src="portrait.webp" alt="Portrait of Asim">
-      <img class="person-rim" src="portrait-rim.webp" alt="">
+      <img class="person-shadow" src="portrait-clean.webp" alt="">
+      <img class="person-main" src="portrait-clean.webp" alt="Portrait of Asim">
     </div>
   </div>
 
