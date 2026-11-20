@@ -440,8 +440,6 @@ ul { list-style: none; }
 .stack-card:last-child { margin-bottom: 0; }
 .stack::after { content: ""; display: block; height: 130vh; }
 .touch .stack-card { height: 100lvh; }
-/* On phones the title glaze holds still instead of drifting behind the scroll */
-.touch .cover-glaze { animation: none; }
 .touch .card-media { clip-path: none; border-radius: 24px; transform: scale(.84); will-change: transform; }
 .card-body { position: absolute; inset: 0; }
 /* The last card is the only one without the scroll filter, so Chrome can send its video to a hardware overlay and leave stale pixels behind it */
@@ -603,6 +601,19 @@ html:not(.touch) .stack-card:last-child .card-body { filter: brightness(1); }
 .card-next svg { width: 1.2em; height: 1.2em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .is-playing .card-next { opacity: .5; visibility: visible; }
 .is-playing .card-next:hover, .is-playing .card-next:focus-visible, .is-playing .card-next:active { opacity: 1; background: rgba(3, 25, 10, .62); border-color: rgba(255, 255, 255, .8); }
+/* Phones: Next stays hidden, then pops up 5 seconds into the film as a solid button */
+.touch .is-playing .card-next { opacity: 0; visibility: hidden; transform: translateX(-50%) translateY(1.2rem) scale(.9); }
+.touch .is-playing.show-next .card-next { opacity: 1; visibility: visible; transform: translateX(-50%); background: var(--lime); color: var(--text-on-accent); border-color: transparent; text-shadow: none; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); transition: opacity .3s, visibility .3s, transform .5s cubic-bezier(.34, 1.5, .64, 1); }
+@keyframes next-nudge {
+  0% { transform: translateX(-50%) scale(1); box-shadow: 0 0 0 0 rgba(143, 219, 114, .75), 0 10px 30px rgba(0, 0, 0, .35); }
+  35% { transform: translateX(-50%) scale(1.2); }
+  65% { transform: translateX(-50%) scale(.96); }
+  100% { transform: translateX(-50%) scale(1); box-shadow: 0 0 0 22px rgba(143, 219, 114, 0), 0 10px 30px rgba(0, 0, 0, .35); }
+}
+.touch .is-playing.show-next .card-next.nudge { animation: next-nudge .7s ease-out; }
+/* A quick dark cover hides the jump between films on phones */
+.jump-veil { position: fixed; inset: 0; z-index: 120; background: #03290F; opacity: 0; pointer-events: none; transition: opacity .25s; }
+.jump-veil.is-on { opacity: 1; }
 .card-sound:hover { background: var(--forest-night); }
 .card-sound svg { width: 55%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .card-sound .sound-on, .card-sound.is-on .sound-off { display: none; }
@@ -1029,6 +1040,7 @@ html:not(.touch) .stack-card:last-child .card-body { filter: brightness(1); }
 </footer>
 
 <div class="scrim" id="scrim"></div>
+<div class="jump-veil" id="jumpVeil" aria-hidden="true"></div>
 <button class="burger" id="burger" type="button" aria-label="Open menu" aria-expanded="false" data-menu-toggle><i></i><i></i></button>
 
 <aside class="menu" id="menu" aria-label="Menu" inert>
@@ -1270,9 +1282,7 @@ const artSvg = i => `<svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid sl
 
 
 // Phones held upright get the vertical cut of each film
-/* Phones held upright get a lighter 720p cut with a still poster; desktop keeps the full films */
-const phoneFilm = touch && matchMedia('(max-aspect-ratio: 1/1)').matches;
-const filmFor = p => (phoneFilm ? p.video.replace('.mp4', '-m.mp4') : matchMedia('(max-aspect-ratio: 1/1)').matches ? p.video.replace('.mp4', '-v.mp4') : p.video);
+const filmFor = p => (matchMedia('(max-aspect-ratio: 1/1)').matches ? p.video.replace('.mp4', '-v.mp4') : p.video);
 const SOUND_BUTTON = `<button class="card-sound" type="button" data-sound aria-label="Turn sound on" aria-pressed="false">
   <svg viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path class="sound-off" d="m16 9.5 5 5m0-5-5 5"/><path class="sound-on" d="M16 9a4.2 4.2 0 0 1 0 6m2.6-8.6a8 8 0 0 1 0 11.2"/></svg>
 </button>`;
@@ -1281,7 +1291,7 @@ $('#stack').innerHTML = PROJECTS.map((p, i) => `
     <div class="card-body">
       <div class="card-media">
         <div class="card-inner">${p.video
-          ? `<video src="${filmFor(p)}"${phoneFilm ? ` poster="${p.video.replace('.mp4', '-m.webp')}"` : ''} muted playsinline preload="${phoneFilm ? 'none' : touch ? 'metadata' : 'auto'}"></video>`
+          ? `<video src="${filmFor(p)}" muted playsinline preload="${touch ? 'metadata' : 'auto'}"></video>`
           : `<div class="card-placeholder">${artSvg(i)}</div>`}</div>
         <a class="card-cover" href="#${p.slug}" aria-label="${p.title}, view project">
           <span class="cover-glaze cover-glaze-a"></span>
@@ -1316,6 +1326,7 @@ function setPlaying(card, on) {
   if (card.playing === on) return;
   card.playing = on;
   card.classList.toggle('is-playing', on);
+  if (!on) card.classList.remove('show-next');
   glowResting = !!$('.stack-card.is-playing');
   const video = $('video', card);
   if (!video) return;
@@ -1326,6 +1337,26 @@ function setPlaying(card, on) {
   } else {
     video.pause();
   }
+}
+
+/* Phones: while a film plays, the page holds still. A swipe brings Next forward and makes it pulse instead */
+if (touch) {
+  let lastNudge = 0;
+  const hold = e => {
+    const card = $('.stack-card.is-playing');
+    if (!card || menuOpen || e.target.closest('.menu, [data-next], [data-sound]')) return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now - lastNudge < 700) return;
+    lastNudge = now;
+    card.classList.add('show-next');
+    const btn = $('[data-next]', card);
+    btn.classList.remove('nudge');
+    void btn.offsetWidth;
+    btn.classList.add('nudge');
+  };
+  addEventListener('touchmove', hold, { passive: false });
+  addEventListener('wheel', hold, { passive: false });
 }
 
 /* Footer details that do not depend on motion */
@@ -1565,8 +1596,7 @@ if (!motion) {
       .to($('.card-cover', card), { autoAlpha: 0, duration: .24 }, .76);
     if (!touch) open.fromTo($('.card-inner', card), { scale: 1.12 }, { scale: 1, duration: 1, ease: 'power2.out' }, 0);
     const film = $('video', card);
-    /* Phones fetch a film only as its card starts to open, so downloading never overlaps the scroll before it */
-    if (touch && film) ScrollTrigger.create({ trigger: card, start: phoneFilm ? 'top top' : 'top 180%', once: true, onEnter: () => { film.preload = 'auto'; } });
+    if (touch && film) ScrollTrigger.create({ trigger: card, start: 'top 180%', once: true, onEnter: () => { film.preload = 'auto'; } });
     opening.push(open);
 
     ScrollTrigger.create({
@@ -1581,13 +1611,25 @@ if (!motion) {
       const target = opening[i + 1] ? opening[i + 1].scrollTrigger.end : $('.more');
       lenis?.scrollTo(target, { duration, force: true, easing: t => 1 - Math.pow(1 - t, 3) });
     };
-    $('video', card)?.addEventListener('ended', () => toNext(2.8));
-    $('[data-next]', card).addEventListener('click', () => toNext(2));
+    /* Phones skip the long scroll: the screen covers for a moment and lands on the next film, already open */
+    const jumpNext = () => {
+      const target = opening[i + 1] ? opening[i + 1].scrollTrigger.end : $('.more');
+      const veil = $('#jumpVeil');
+      veil.classList.add('is-on');
+      setTimeout(() => {
+        lenis ? lenis.scrollTo(target, { immediate: true, force: true }) : window.scrollTo(0, typeof target === 'number' ? target : target.getBoundingClientRect().top + scrollY);
+        ScrollTrigger.update();
+        requestAnimationFrame(() => veil.classList.remove('is-on'));
+      }, 260);
+    };
+    if (touch && film) film.addEventListener('timeupdate', () => { if (card.playing && film.currentTime >= 5) card.classList.add('show-next'); });
+    film?.addEventListener('ended', () => { if (touch) card.classList.add('show-next'); else toNext(2.8); });
+    $('[data-next]', card).addEventListener('click', () => (touch ? jumpNext() : toNext(2)));
 
     const next = cards[i + 1];
     if (next) {
-      gsap.fromTo($('.card-body', card), touch ? { opacity: 1 } : { scale: 1, filter: 'blur(0px) brightness(1)' }, {
-        ...(touch ? { opacity: .35 } : { scale: .88, filter: 'blur(7px) brightness(.55)' }), ease: 'none',
+      gsap.fromTo($('.card-body', card), touch ? { scale: 1 } : { scale: 1, filter: 'blur(0px) brightness(1)' }, {
+        ...(touch ? { scale: .92 } : { scale: .88, filter: 'blur(7px) brightness(.55)' }), ease: 'none',
         scrollTrigger: { trigger: next, start: 'top bottom', end: 'top top', scrub: true }
       });
       ScrollTrigger.create({
